@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Index</title>
+    <link rel="stylesheet" href="/-/assets/bootstrap-4.5.0-dist/bootstrap-4.5.0-dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/-/assets/css/dropzone.min.css">
+    <link rel="stylesheet" href="/-/assets/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/-/assets/css/index.css">
+    <link rel="shortcut icon" href="/-/assets/favicon.ico">
+</head>
+<body>
+    <div id="app">
+        <nav class="nav">
+            <div class="container">
+                <a class="title" href="/">Go File Server</a>
+                <form class="nav-search">
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control search" placeholder="Search" autofocus>
+                        <button type="submit" class="search-button">
+                            <span class="icon-search"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </nav>
+        <div class="container">
+            <div class="col-md-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a v-on:click='changePath("/", $event)' href="/"><i class="icon-home"></i></a></li>
+                        <li class="breadcrumb-item" v-for="bc in breadcrumb.slice(0, breadcrumb.length-1)">
+                            <span v-on:click='changePath(bc.path, $event)' class="file-link">{{bc.name}}</span>
+                        </li>
+                        <li v-if="breadcrumb.length >= 1" class="breadcrumb-item active" aria-current="page">{{breadcrumb.slice(-1)[0].name}}</li>
+                    </ol>
+                </nav>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <td colspan=4>
+                                <div>
+                                    <button class="btn btn-light btn-font" onclick="history.back()">
+                                        Back <i class="icon-arrow-left"></i>
+                                    </button>
+                                    <button class="btn btn-light btn-font" v-on:click="clickHidden()">
+                                        Hidden <i v-bind:class='showHidden ? "icon-eye-open" : "icon-eye-close"'></i>
+                                    </button>
+                                    <button class="btn btn-light btn-font" data-toggle="modal" data-target="#upload-modal">
+                                        Upload <i class="icon-upload"></i>
+                                    </button>
+                                    <button class="btn btn-light btn-font" v-on:click="initShowAlert()" data-toggle="modal" data-target="#folder-modal">
+                                        New Folder <i class="icon-folder-close"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr colspan=4>
+                            <th>Name</th>
+                            <th>Size</th>
+                            <th>ModTime</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody v-for="file in computedFiles">
+                        <tr>
+                            <td><span v-on:click='clickFileOrDir(file, $event)' class="file-link">{{file.name}}</span></td>
+                            <td>{{file.size | formatBytes}}</td>
+                            <td>{{file.mtime | formatDate}}</td>
+                            <td>
+                                <button class="btn btn-light btn-font" onclick="history.back()">
+                                    Archive Zip <i class="icon-download"></i>
+                                </button>
+                                <button class="btn btn-light btn-font" v-on:click="downloadFile(file.name)">
+                                    Download <i class="icon-download"></i>
+                                </button>
+                                <button class="btn btn-light btn-font" v-on:click="deleteAll(file.name)">
+                                    Delete <i class="icon-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-12">
+                <div class="footer">
+                    Copyright 2020
+                </div>
+            </div>
+        </div>
+
+        <!-- Folder Modal -->
+        <div class="modal fade" id="folder-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">New Folder</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div v-show="showAlert" class="alert alert-danger" role="alert">
+                        {{alertMessage}}
+                    </div>
+                    <div class="modal-body">
+                        <form>
+                            <div class="form-group">
+                                <input type="text" class="form-control form-control-input" v-model="dirName">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" v-on:click="newFolder()">Create</button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Upload Modal -->
+        <div class="modal fade" id="upload-modal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">File Upload</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form action="#" class="dropzone" id="my-awesome-dropzone"></form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" v-on:click="removeAll()">RemoveAll</button>
+                        <button type="button" class="btn btn-primary" v-on:click="removeAll()" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/-/assets/js/dropzone.min.js"></script>
+    <script src="/-/assets/js/jquery-3.5.1.js"></script>
+    <script src="/-/assets/js/popper.js"></script>
+    <script src="/-/assets/js/underscore-min.js"></script>
+    <script src="/-/assets/bootstrap-4.5.0-dist/bootstrap-4.5.0-dist/js/bootstrap.min.js"></script>
+    <script src="/-/assets/js/vue.js"></script>
+    <script src="/-/assets/js/index.js"></script>
+</body>
+</html>

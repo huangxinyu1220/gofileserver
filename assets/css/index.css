@@ -1,0 +1,72 @@
+.nav {
+    min-height: 50px;
+    margin-bottom: 20px;
+    background-color: #9fcdff;
+}
+
+.title {
+    float: left;
+    text-decoration: none;
+    font-size: 20px;
+    color: black;
+    line-height: 50px;
+    display: inline-block;
+}
+.title:hover {
+    text-decoration: none;
+    color: white;
+    font-weight: 700;
+}
+.nav-search {
+    float: right;
+    margin: 7px;
+}
+.form-control {
+    height: 34px;
+}
+.form-control-input {
+    height: 45px;
+}
+.breadcrumb {
+    padding: 8px 16px;
+    font-size: 14px;
+}
+.footer {
+    font-size: 14px;
+    float: right;
+}
+.a-click:hover {
+    color: #19692c;
+    cursor:pointer
+}
+.btn {
+    line-height: 13px;
+    border-radius: 15px;
+    border-color: #bcc7d2;
+}
+.btn:focus {
+    border-width: 1px;
+    border-color: #79b0e6;
+}
+.btn-font {
+    font-size: 13px;
+    padding: 6px 6px;
+}
+.search-button {
+    background-color: white;
+    width: 32px;
+    border-top-right-radius: .25rem;
+    border-bottom-right-radius: .25rem;
+    border: 1px solid #ced4da;
+}
+.file-link {
+    color: black;
+}
+.file-link:hover {
+    text-decoration:underline;
+    color: #9fcdff;
+    cursor:pointer;
+}
+.modal-dialog {
+    max-width: 540px;
+}
