@@ -4,17 +4,12 @@ vm = new Vue({
         showHidden: false,
         breadcrumb: [],
         fileList: [
-            {
-                name: "loading",
-                mtime: "",
-                path: "",
-                size: ""
-            }
         ],
         dirName: "",
         showAlert: false,
         alertMessage: "",
         myDropzone: null,
+        search: "",
     },
     created: function () {
         Dropzone.autoDiscover = false;
@@ -101,11 +96,13 @@ vm = new Vue({
         },
         newFolder: function () {
             var that = this;
-            if (that.dirName === "") {
+            var patt = /^[0-9a-zA-Z_\.]+$/;
+            if (that.dirName === "" || !patt.test(that.dirName)) {
                 that.alertMessage = "Folder name should not be empty or contain illegal characters!";
                 that.showAlert = true;
                 return
             }
+            console.log(!patt.test(that.dirName));
             $.ajax({
                 url: pathJoin(["/-/mkdir", location.pathname]),
                 type: "POST",
@@ -113,6 +110,7 @@ vm = new Vue({
                     name: that.dirName,
                 },
                 success: function () {
+                    that.search = "";
                     loadFileList();
                     $('#folder-modal').modal('hide');
                 },
@@ -125,6 +123,9 @@ vm = new Vue({
         },
         downloadFile: function (name) {
             window.location.href= pathJoin([location.pathname, name]) + "?download=true"
+        },
+        clickSearch: function () {
+            loadFileList();
         }
     },
     filters: {
@@ -155,10 +156,7 @@ vm = new Vue({
 });
 
 window.onpopstate = function (event) {
-    if (location.search.match(/\?search=/)) {
-        location.reload();
-        return;
-    }
+    vm.search = "";
     loadFileList();
 };
 
@@ -169,15 +167,16 @@ function pathJoin(parts, sep) {
 }
 
 function loadFileOrDir(path) {
-    var requestUri = path + location.search;
-    window.history.pushState({}, "", requestUri);
-    loadFileList(requestUri);
+    window.history.pushState({}, "", path);
+    vm.search = "";
+    loadFileList(path);
 }
 
 function loadFileList(pathname) {
-    pathname = pathname || location.pathname + location.search;
+    pathname = pathname || location.pathname;
+    var search = vm.search !== "" ? "&search=" + vm.search : "";
     $.ajax({
-        url: pathname + "?json=true",
+        url: pathname + "?json=true" + search,
         dataType: "json",
         type: "GET",
         success: function (res) {

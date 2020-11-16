@@ -57,6 +57,7 @@ func addFileToZip(zw *zip.Writer, relPath string, absPath string) error {
 	} else {
 		header.Name = relPath
 	}
+	header.Method = zip.Deflate
 	w, err := zw.CreateHeader(header)
 	if err != nil {
 		return err

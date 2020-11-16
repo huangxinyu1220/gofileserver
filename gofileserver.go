@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/gorilla/mux"
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -10,14 +9,19 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/gorilla/mux"
 )
 
 type GoFileServer struct {
 	Root            string
 	Upload          bool
 	Delete          bool
+	indexMap		map[string]FileInfo
 	m				*mux.Router
 }
 
@@ -42,6 +46,12 @@ func NewGoFileServer(root string) *GoFileServer {
 		Root:   root,
 		m:      m,
 	}
+	go func() {
+		for	{
+			s.initIndexMap()
+			time.Sleep(5 * time.Minute)
+		}
+	}()
 	m.HandleFunc("/-/status", s.status).Methods("GET")
 	m.HandleFunc("/-/mkdir/{path:.*}", s.mkdir).Methods("POST")
 	m.HandleFunc("/{path:.*}", s.index).Methods("GET")
@@ -54,6 +64,43 @@ func (s *GoFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.m.ServeHTTP(w, r)
 }
 
+func (s *GoFileServer) initIndexMap() {
+	indexMap := make(map[string]FileInfo)
+	filepath.Walk(s.Root, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			relPath, err := filepath.Rel(s.Root, path)
+			if err != nil {
+				return err
+			}
+			relPath = filepath.ToSlash(relPath)
+			fileInfo := FileInfo{
+				Name:    relPath,
+				Path:    relPath,
+				Size:    info.Size(),
+				ModTime: info.ModTime().UnixNano() / 1e6,
+				IsDir:   info.IsDir(),
+			}
+			indexMap[relPath] = fileInfo
+		}
+		return nil
+	})
+	s.indexMap = indexMap
+}
+
+func (s *GoFileServer) searchIndex (rootPath string, text string) []FileInfo{
+	fileList := make([]FileInfo, 0)
+	length := len(rootPath)
+	for path, fileInfo := range s.indexMap {
+		if strings.HasPrefix(path, rootPath) && strings.Contains(filepath.Base(path), text){
+			if length > 0 {
+				fileInfo.Name = fileInfo.Name[length+1:]
+			}
+			fileList = append(fileList, fileInfo)
+		}
+	}
+	return fileList
+}
+
 func (s *GoFileServer) status(w http.ResponseWriter, r *http.Request) {
 	data, _ := json.MarshalIndent(s, "", "    ")
 	w.Header().Set("Content-Type", "application/json")
@@ -63,7 +110,18 @@ func (s *GoFileServer) status(w http.ResponseWriter, r *http.Request) {
 func (s *GoFileServer) mkdir(w http.ResponseWriter, r *http.Request) {
 	path := mux.Vars(r)["path"]
 	name := r.FormValue("name")
-	err := os.Mkdir(filepath.Join(s.Root, path, name), 0755)
+	matched, err := regexp.MatchString("^[0-9a-zA-Z_\\.]+$", name)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		log.Println(err)
+		return
+	}
+	if !matched {
+		http.Error(w, "Dirname contains illegal characters!", 400)
+		log.Println(err)
+		return
+	}
+	err = os.Mkdir(filepath.Join(s.Root, path, name), 0755)
 	if err != nil {
 		http.Error(w, err.Error(), 400)
 		log.Println(err)
@@ -78,7 +136,13 @@ func (s *GoFileServer) index(w http.ResponseWriter, r *http.Request) {
 	path := mux.Vars(r)["path"]
 	realPath := filepath.Join(s.Root, path)
 	if isDir(realPath) {
-		renderHTML(w, "index.html", s)
+		if r.FormValue("download") == "true" {
+			w.Header().Set("Content-Type", "application/zip")
+			w.Header().Set("Content-Disposition", "attachment; filename=" + strconv.Quote(filepath.Base(path)+".zip"))
+			compressZipFile(w, realPath)
+		} else {
+			renderHTML(w, "index.html", s)
+		}
 	} else {
 		if r.FormValue("download") == "true" {
 			w.Header().Set("Content-Disposition", "attachment; filename=" + strconv.Quote(filepath.Base(path)))
@@ -88,28 +152,33 @@ func (s *GoFileServer) index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *GoFileServer) jsonList(w http.ResponseWriter, r *http.Request) {
-	path := mux.Vars(r)["path"]
-	localPath := filepath.Join(s.Root, path)
-	infos, err := ioutil.ReadDir(localPath)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		log.Println(err.Error())
-		return
-	}
-	filePathMap := make(map[string]os.FileInfo)
-	for _, info := range infos {
-		filePathMap[filepath.Join(path, info.Name())] = info
-	}
 	fileList := make([]FileInfo, 0)
-	for path, info := range filePathMap {
-		fileInfo := FileInfo {
-			Name:    info.Name(),
-			Path:    path,
-			Size:    info.Size(),
-			ModTime: info.ModTime().UnixNano() / 1e6,
-			IsDir:   info.IsDir(),
+	path := mux.Vars(r)["path"]
+	if r.FormValue("search") != "" {
+		searchText := r.FormValue("search")
+		fileList = s.searchIndex(path, searchText)
+	} else {
+		localPath := filepath.Join(s.Root, path)
+		infos, err := ioutil.ReadDir(localPath)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			log.Println(err.Error())
+			return
 		}
-		fileList = append(fileList, fileInfo)
+		filePathMap := make(map[string]os.FileInfo)
+		for _, info := range infos {
+			filePathMap[filepath.Join(path, info.Name())] = info
+		}
+		for path, info := range filePathMap {
+			fileInfo := FileInfo{
+				Name:    info.Name(),
+				Path:    path,
+				Size:    info.Size(),
+				ModTime: info.ModTime().UnixNano() / 1e6,
+				IsDir:   info.IsDir(),
+			}
+			fileList = append(fileList, fileInfo)
+		}
 	}
 	data, err := json.Marshal(fileList)
 	if err != nil {
@@ -130,13 +199,10 @@ func (s *GoFileServer) delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *GoFileServer) upload(w http.ResponseWriter, r *http.Request) {
-	log.Println("get upload request")
 	path := mux.Vars(r)["path"]
 	file, header, _ := r.FormFile("file")
-	log.Println(header.Filename)
 	defer func() {
 		file.Close()
-		log.Println(r.MultipartForm)
 		r.MultipartForm.RemoveAll()
 	}()
 	filename := r.FormValue("filename")

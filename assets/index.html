@@ -14,14 +14,14 @@
         <nav class="nav">
             <div class="container">
                 <a class="title" href="/">Go File Server</a>
-                <form class="nav-search">
+                <div class="nav-search">
                     <div class="input-group">
-                        <input type="text" name="search" class="form-control search" placeholder="Search" autofocus>
-                        <button type="submit" class="search-button">
+                        <input type="text" name="search" v-model="search" class="form-control search" placeholder="Search" autofocus>
+                        <button type="submit" class="search-button" v-on:click="clickSearch">
                             <span class="icon-search"></span>
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </nav>
         <div class="container">
@@ -68,10 +68,10 @@
                             <td>{{file.size | formatBytes}}</td>
                             <td>{{file.mtime | formatDate}}</td>
                             <td>
-                                <button class="btn btn-light btn-font" onclick="history.back()">
+                                <button v-show="file.is_dir" class="btn btn-light btn-font" v-on:click="downloadFile(file.name)">
                                     Archive Zip <i class="icon-download"></i>
                                 </button>
-                                <button class="btn btn-light btn-font" v-on:click="downloadFile(file.name)">
+                                <button v-show="!file.is_dir" class="btn btn-light btn-font" v-on:click="downloadFile(file.name)">
                                     Download <i class="icon-download"></i>
                                 </button>
                                 <button class="btn btn-light btn-font" v-on:click="deleteAll(file.name)">
