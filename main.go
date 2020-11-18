@@ -4,22 +4,25 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/alecthomas/kingpin.v2"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"text/template"
-	//"io/ioutil"
-
-	"gopkg.in/alecthomas/kingpin.v2"
-	//"gopkg.in/yaml.v2"
 )
 
 type Configure struct {
+	Conf			*os.File `yaml:"-"`
 	Root			string	 `yaml:"root"`
 	Addr 			string 	 `yaml:"addr"`
 	Port 			int 	 `yaml:"port"`
 	Upload          bool     `yaml:"upload"`
 	Delete          bool     `yaml:"delete"`
+	Theme			string	 `yaml:"theme"`
+	Title			string	 `yaml:"title"`
 }
 
 var (
@@ -30,18 +33,34 @@ var (
 	AUTHOR 		= "huangxinyu"
 )
 
-
-
-func parseFlags() {
-	cfg.Root = "./test_data"
-
+func parseFlags() error {
+	cfg.Root = "./"
+	cfg.Port = 8000
+	cfg.Addr = ""
+	cfg.Theme = "blue"
+	cfg.Title = "Go File Server"
 	kingpin.HelpFlag.Short('h')
 	kingpin.Version(versionMessage())
-	kingpin.Flag("port", "listen port, default value is 8000").Short('p').Default("8000").IntVar(&cfg.Port)
+	kingpin.Flag("conf", "config file path, file format: yaml").FileVar(&cfg.Conf)
+	kingpin.Flag("port", "listen port, default value is 8000").Short('p').IntVar(&cfg.Port)
 	kingpin.Flag("addr", "listen address, eg. 127.0.0.1:8000").Short('a').StringVar(&cfg.Addr)
-	kingpin.Flag("upload", "enable upload support").Default("false").Short('u').BoolVar(&cfg.Upload)
-	kingpin.Flag("delete", "enable delete support").Default("false").Short('d').BoolVar(&cfg.Delete)
+	kingpin.Flag("upload", "enable upload support").Short('u').BoolVar(&cfg.Upload)
+	kingpin.Flag("delete", "enable delete support").Short('d').BoolVar(&cfg.Delete)
+	kingpin.Flag("theme", "theme of ui, [blue, green], default is blue").StringVar(&cfg.Theme)
+	kingpin.Flag("title", "title of ui, default is 'Go File Server'").StringVar(&cfg.Title)
 	kingpin.Parse()
+	if cfg.Conf != nil {
+		data, err := ioutil.ReadAll(cfg.Conf)
+		if err != nil {
+			return err
+		}
+		err = yaml.Unmarshal(data, &cfg)
+		if err != nil {
+			return err
+		}
+		kingpin.Parse()
+	}
+	return nil
 }
 
 func versionMessage() string {
@@ -66,12 +85,17 @@ func versionMessage() string {
 }
 
 func main() {
-	parseFlags()
+	err := parseFlags()
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("Configure: %+v", cfg)
 
 	gfs := NewGoFileServer(cfg.Root)
 	gfs.Upload = cfg.Upload
 	gfs.Delete = cfg.Delete
+	gfs.Theme = cfg.Theme
+	gfs.Title = cfg.Title
 
 	http.Handle("/", gfs)
 	http.Handle("/-/assets/", http.StripPrefix("/-/assets/", http.FileServer(Assets)))
@@ -85,7 +109,7 @@ func main() {
 	if cfg.Addr == "" {
 		cfg.Addr = fmt.Sprintf(":%d", cfg.Port)
 	}
-	err := http.ListenAndServe(cfg.Addr, nil)
+	err = http.ListenAndServe(cfg.Addr, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,15 +1,16 @@
-package main
+package utils
 
 import (
 	"archive/zip"
 	"bytes"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 )
 
-func compressZipFile(w io.Writer, dir string) {
+func CompressZipFile(w io.Writer, dir string) {
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -65,6 +66,40 @@ func addFileToZip(zw *zip.Writer, relPath string, absPath string) error {
 	_, err = io.Copy(w, reader)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func DecompressZipFile(zipFile string, dst string) error {
+	zf, err := zip.OpenReader(zipFile)
+	if err != nil {
+		return err
+	}
+	defer zf.Close()
+	for _, f := range zf.File {
+		filename := filepath.Join(dst, f.Name)
+		if f.FileInfo().IsDir() {
+			err := os.MkdirAll(filename, 0755)
+			if err != nil {
+				return err
+			}
+		} else {
+			srcFile, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer srcFile.Close()
+			dstFile, err := os.Create(filename)
+			if err != nil {
+				return err
+			}
+			defer dstFile.Close()
+			n, err := io.Copy(dstFile, srcFile)
+			if err != nil {
+				return err
+			}
+			log.Println("copy", n, "bytes successfully")
+		}
 	}
 	return nil
 }

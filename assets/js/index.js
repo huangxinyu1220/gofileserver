@@ -72,10 +72,14 @@ vm = new Vue({
             this.myDropzone.removeAllFiles();
         },
         deleteAll: function (name) {
+            var that = this;
             $.ajax({
                 url: pathJoin([location.pathname, name]),
                 type: "DELETE",
                 success: function () {
+                    if (that.fileList.length === 1){
+                        that.search = "";
+                    }
                     loadFileList();
                 },
                 error: function (err) {

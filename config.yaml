@@ -1,0 +1,5 @@
+root: ./test_data
+title: Go File Server
+upload: true
+delete: true
+theme: green

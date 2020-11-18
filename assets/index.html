@@ -2,18 +2,18 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Index</title>
+    <title>[[.Title]]</title>
     <link rel="stylesheet" href="/-/assets/bootstrap-4.5.0-dist/bootstrap-4.5.0-dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="/-/assets/css/dropzone.min.css">
     <link rel="stylesheet" href="/-/assets/css/font-awesome.min.css">
-    <link rel="stylesheet" href="/-/assets/css/index.css">
+    <link rel="stylesheet" href="/-/assets/css/[[.Theme]].css">
     <link rel="shortcut icon" href="/-/assets/favicon.ico">
 </head>
 <body>
     <div id="app">
         <nav class="nav">
             <div class="container">
-                <a class="title" href="/">Go File Server</a>
+                <a class="title" href="/">[[.Title]]</a>
                 <div class="nav-search">
                     <div class="input-group">
                         <input type="text" name="search" v-model="search" class="form-control search" placeholder="Search" autofocus>
@@ -38,7 +38,7 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <td colspan=4>
+                            <td colspan=5>
                                 <div>
                                     <button class="btn btn-light btn-font" onclick="history.back()">
                                         Back <i class="icon-arrow-left"></i>
@@ -46,10 +46,10 @@
                                     <button class="btn btn-light btn-font" v-on:click="clickHidden()">
                                         Hidden <i v-bind:class='showHidden ? "icon-eye-open" : "icon-eye-close"'></i>
                                     </button>
-                                    <button class="btn btn-light btn-font" data-toggle="modal" data-target="#upload-modal">
+                                    <button v-show="[[.Upload]]" class="btn btn-light btn-font" data-toggle="modal" data-target="#upload-modal">
                                         Upload <i class="icon-upload"></i>
                                     </button>
-                                    <button class="btn btn-light btn-font" v-on:click="initShowAlert()" data-toggle="modal" data-target="#folder-modal">
+                                    <button v-show="[[.Delete]]" class="btn btn-light btn-font" v-on:click="initShowAlert()" data-toggle="modal" data-target="#folder-modal">
                                         New Folder <i class="icon-folder-close"></i>
                                     </button>
                                 </div>
@@ -57,6 +57,7 @@
                         </tr>
                         <tr colspan=4>
                             <th>Name</th>
+                            <th>Type</th>
                             <th>Size</th>
                             <th>ModTime</th>
                             <th>Action</th>
@@ -65,6 +66,8 @@
                     <tbody v-for="file in computedFiles">
                         <tr>
                             <td><span v-on:click='clickFileOrDir(file, $event)' class="file-link">{{file.name}}</span></td>
+                            <td v-show="file.is_dir">Dir</td>
+                            <td v-show="!file.is_dir">File</td>
                             <td>{{file.size | formatBytes}}</td>
                             <td>{{file.mtime | formatDate}}</td>
                             <td>
@@ -74,7 +77,7 @@
                                 <button v-show="!file.is_dir" class="btn btn-light btn-font" v-on:click="downloadFile(file.name)">
                                     Download <i class="icon-download"></i>
                                 </button>
-                                <button class="btn btn-light btn-font" v-on:click="deleteAll(file.name)">
+                                <button v-show="[[.Delete]]" class="btn btn-light btn-font" v-on:click="deleteAll(file.name)">
                                     Delete <i class="icon-trash"></i>
                                 </button>
                             </td>
@@ -141,6 +144,7 @@
     <script src="/-/assets/js/jquery-3.5.1.js"></script>
     <script src="/-/assets/js/popper.js"></script>
     <script src="/-/assets/js/underscore-min.js"></script>
+    <script src="/-/assets/bootstrap-4.5.0-dist/bootstrap-4.5.0-dist/js/bootstrap.bundle.min.js"></script>
     <script src="/-/assets/bootstrap-4.5.0-dist/bootstrap-4.5.0-dist/js/bootstrap.min.js"></script>
     <script src="/-/assets/js/vue.js"></script>
     <script src="/-/assets/js/index.js"></script>

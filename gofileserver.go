@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"gofileserver/utils"
+
 	"github.com/gorilla/mux"
 )
 
@@ -21,6 +23,8 @@ type GoFileServer struct {
 	Root            string
 	Upload          bool
 	Delete          bool
+	Theme           string
+	Title           string
 	indexMap		map[string]FileInfo
 	m				*mux.Router
 }
@@ -107,27 +111,6 @@ func (s *GoFileServer) status(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func (s *GoFileServer) mkdir(w http.ResponseWriter, r *http.Request) {
-	path := mux.Vars(r)["path"]
-	name := r.FormValue("name")
-	matched, err := regexp.MatchString("^[0-9a-zA-Z_\\.]+$", name)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		log.Println(err)
-		return
-	}
-	if !matched {
-		http.Error(w, "Dirname contains illegal characters!", 400)
-		log.Println(err)
-		return
-	}
-	err = os.Mkdir(filepath.Join(s.Root, path, name), 0755)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		log.Println(err)
-	}
-}
-
 func (s *GoFileServer) index(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("json") == "true" {
 		s.jsonList(w, r)
@@ -139,7 +122,7 @@ func (s *GoFileServer) index(w http.ResponseWriter, r *http.Request) {
 		if r.FormValue("download") == "true" {
 			w.Header().Set("Content-Type", "application/zip")
 			w.Header().Set("Content-Disposition", "attachment; filename=" + strconv.Quote(filepath.Base(path)+".zip"))
-			compressZipFile(w, realPath)
+			utils.CompressZipFile(w, realPath)
 		} else {
 			renderHTML(w, "index.html", s)
 		}
@@ -161,18 +144,13 @@ func (s *GoFileServer) jsonList(w http.ResponseWriter, r *http.Request) {
 		localPath := filepath.Join(s.Root, path)
 		infos, err := ioutil.ReadDir(localPath)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
-			log.Println(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		filePathMap := make(map[string]os.FileInfo)
 		for _, info := range infos {
-			filePathMap[filepath.Join(path, info.Name())] = info
-		}
-		for path, info := range filePathMap {
 			fileInfo := FileInfo{
 				Name:    info.Name(),
-				Path:    path,
+				Path:    filepath.Join(path, info.Name()),
 				Size:    info.Size(),
 				ModTime: info.ModTime().UnixNano() / 1e6,
 				IsDir:   info.IsDir(),
@@ -182,19 +160,28 @@ func (s *GoFileServer) jsonList(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := json.Marshal(fileList)
 	if err != nil {
-		log.Fatal(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
 
-func (s *GoFileServer) delete(w http.ResponseWriter, r *http.Request) {
-	log.Println("get delete request")
+func (s *GoFileServer) mkdir(w http.ResponseWriter, r *http.Request) {
 	path := mux.Vars(r)["path"]
-	err := os.RemoveAll(filepath.Join(s.Root, path))
+	name := r.FormValue("name")
+	matched, err := regexp.MatchString("^[0-9a-zA-Z_\\.]+$", name)
 	if err != nil {
-		http.Error(w, err.Error(), 400)
-		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !matched {
+		http.Error(w, "Dirname contains illegal characters!", http.StatusBadRequest)
+		return
+	}
+	err = os.Mkdir(filepath.Join(s.Root, path, name), 0755)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -209,16 +196,42 @@ func (s *GoFileServer) upload(w http.ResponseWriter, r *http.Request) {
 	if filename == "" {
 		filename = header.Filename
 	}
-	dst, _ := os.Create(filepath.Join(s.Root, path, filename))
+	dst, err := os.Create(filepath.Join(s.Root, path, filename))
 	defer dst.Close()
-	n, _ := io.Copy(dst, file)
-	log.Println("copy", n, "bytes successfully")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = io.Copy(dst, file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Update indexMap
+	info, err:= dst.Stat()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	name := filepath.Join(path, filename)
+	fileInfo := FileInfo{
+		Name:    name,
+		Path:    path,
+		Size:    info.Size(),
+		ModTime: info.ModTime().UnixNano() / 1e6,
+		IsDir:   info.IsDir(),
+	}
+	s.indexMap[name] = fileInfo
 }
 
-func getContent(name string) string {
-	f, _ := Assets.Open(name)
-	content, _ := ioutil.ReadAll(f)
-	return string(content)
+func (s *GoFileServer) delete(w http.ResponseWriter, r *http.Request) {
+	path := mux.Vars(r)["path"]
+	err := os.RemoveAll(filepath.Join(s.Root, path))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	delete(s.indexMap, path)
 }
 
 func renderHTML(w http.ResponseWriter, name string, v interface{}) {
@@ -230,10 +243,24 @@ func renderHTML(w http.ResponseWriter, name string, v interface{}) {
 	}
 }
 
+func getContent(name string) string {
+	f, err := Assets.Open(name)
+	if err != nil {
+		log.Println(err.Error())
+		return ""
+	}
+	content, err := ioutil.ReadAll(f)
+	if err != nil {
+		log.Println(err.Error())
+		return ""
+	}
+	return string(content)
+}
+
 func isDir(path string) bool {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		log.Println(path, "does not exist")
+		log.Println(err.Error())
 		return false
 	}
 	return fileInfo.IsDir()
