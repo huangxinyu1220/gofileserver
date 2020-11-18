@@ -1,5 +1,5 @@
 # gofileserver
 
-## Usage
+### Usage
 
-go build . && go ./gofileserver --conf=./config.yaml
+go build . && ./gofileserver --conf="./config.yaml"
